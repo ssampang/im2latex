@@ -1,5 +1,9 @@
 """
-This is a modified version of tensorflow.nn.seq2seq's attention_decoder and embedding_attention_decoder which allow dynamic sequence lengths and implement the specific calculations dictated in the im2markup paper. It will probably be rewritten as tensorflow gains dynamic variants of its seq2seq models, such as the recently added dynamic_rnn_decoder.
+This is a modified version of tensorflow.nn.seq2seq's attention_decoder and 
+embedding_attention_decoder which allow dynamic sequence lengths and implement
+the specific calculations dictated in the im2markup paper. It will probably be
+rewritten as tensorflow gains dynamic variants of its seq2seq models, such as 
+the recently added dynamic_rnn_decoder.
 """
 import numpy as np
 import tensorflow as tf
@@ -113,7 +117,8 @@ def attention_decoder(initial_state,
     shape_invariants = [time_step.get_shape(),\
                         prev.get_shape(),\
                         tf.nn.tensor_shape.TensorShape([batch_size, vocab_size]),\
-                        tf.nn.tensor_shape.TensorShape([batch_size,512]),tf.nn.tensor_shape.TensorShape([batch_size,512]),\
+                        tf.nn.tensor_shape.TensorShape([batch_size,512]),\
+                        tf.nn.tensor_shape.TensorShape([batch_size,512]),\
                         tf.nn.tensor_shape.TensorShape([batch_size, None, vocab_size])]
 
 # START keyword is 0
