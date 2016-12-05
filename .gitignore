@@ -1,0 +1,6 @@
+*.pyc
+*.lst
+*.gz
+data/formula_images/*
+data/images_processed/*
+*.txt
