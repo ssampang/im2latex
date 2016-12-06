@@ -1,8 +1,6 @@
+import Image, random, time, os, decoder
 import numpy as np
-import Image, random
 import tensorflow as tf
-import time
-import decoder
 
 def load_data():
   vocab = open('data/latex_vocab.txt').read().split('\n')
@@ -63,7 +61,7 @@ def batchify(data, batch_size):
       labels = map( preprocess, group[i:i+batch_size])
       batch_labels = np.concatenate(labels, 0)
 #[((50, 120), 6000), ((40, 160), 6400), ((40, 200), 8000), ((40, 240), 9600), ((50, 200), 10000), ((40, 280), 11200), ((50, 240), 12000), ((40, 320), 12800), ((50, 280), 14000), ((40, 360), 14400), ((50, 320), 16000), ((50, 360), 18000), ((50, 400), 20000), ((60, 360), 21600), ((100, 360), 36000), ((100, 500), 50000), ((160, 400), 64000)]
-      too_big = [(100,500),(160,400),(100,360),(60,360),(50,400)]
+      too_big = [(160,400),(100,500),(100,360),(60,360),  (100,800), (200,500), (800,800), (100,600)]
       if batch_labels.shape[0] == batch_size and not (batch_images.shape[1],batch_images.shape[2]) in too_big:
         batches.append( (batch_images, batch_labels) )
 #skip the last incomplete batch for now
@@ -136,10 +134,16 @@ def build_model(inp, batch_size, num_rows, num_columns, dec_seq_len):
     with tf.variable_scope('encoder_rnn'):
       with tf.variable_scope('forward'):
         lstm_cell_fw = tf.nn.rnn_cell.LSTMCell(enc_lstm_dim)
-        init_fw = tf.nn.rnn_cell.LSTMStateTuple( tf.get_variable("enc_fw_c", enc_init_shape, initializer=tf.contrib.layers.initializers.xavier_initializer()), tf.get_variable("enc_fw_h", enc_init_shape, initializer= tf.contrib.layers.initializers.xavier_initializer()) )
+        init_fw = tf.nn.rnn_cell.LSTMStateTuple(\
+                  tf.get_variable("enc_fw_c", enc_init_shape, initializer=tf.contrib.layers.initializers.xavier_initializer()),\
+                  tf.get_variable("enc_fw_h", enc_init_shape, initializer=tf.contrib.layers.initializers.xavier_initializer())
+                  )
       with tf.variable_scope('backward'):
         lstm_cell_bw = tf.nn.rnn_cell.LSTMCell(enc_lstm_dim)
-        init_bw = tf.nn.rnn_cell.LSTMStateTuple( tf.get_variable("enc_bw_c", enc_init_shape, initializer= tf.contrib.layers.initializers.xavier_initializer()), tf.get_variable("enc_bw_h", enc_init_shape, initializer= tf.contrib.layers.initializers.xavier_initializer()) )
+        init_bw = tf.nn.rnn_cell.LSTMStateTuple(\
+                  tf.get_variable("enc_bw_c", enc_init_shape, initializer=tf.contrib.layers.initializers.xavier_initializer()),\
+                  tf.get_variable("enc_bw_h", enc_init_shape, initializer=tf.contrib.layers.initializers.xavier_initializer())
+                  )
       output, _ = tf.nn.bidirectional_dynamic_rnn(lstm_cell_fw, \
                                                   lstm_cell_bw, \
                                                   inp, \
@@ -158,12 +162,15 @@ def build_model(inp, batch_size, num_rows, num_columns, dec_seq_len):
 
   dec_lstm_cell = tf.nn.rnn_cell.LSTMCell(dec_lstm_dim)
   dec_init_shape = [batch_size, dec_lstm_dim]
-  dec_init_state = tf.nn.rnn_cell.LSTMStateTuple( tf.truncated_normal(dec_init_shape), tf.truncated_normal(dec_init_shape) )
+  dec_init_state = tf.nn.rnn_cell.LSTMStateTuple( tf.truncated_normal(dec_init_shape),\
+                                                  tf.truncated_normal(dec_init_shape) )
 
   init_words = np.zeros([batch_size,1,vocab_size])
 
   decoder_output = decoder.embedding_attention_decoder(dec_init_state,\
-                                               tf.reshape(encoder_output, [batch_size, -1, 2*enc_lstm_dim]),\
+                                               tf.reshape(encoder_output,\
+                                                          [batch_size, -1,\
+                                                          2*enc_lstm_dim]),\
                                                dec_lstm_cell,\
                                                vocab_size,\
                                                dec_seq_len,
@@ -190,14 +197,14 @@ def main():
   _, (output,state) = build_model(inp, batch_size, num_rows, num_columns, num_words)
   output = output[:,1:]
   cross_entropy = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(output,true_labels))
-  train_step = tf.train.AdadeltaOptimizer(learning_rate).minimize(cross_entropy)
+  train_step = tf.train.GradientDescentOptimizer(learning_rate).minimize(cross_entropy)
   correct_prediction = tf.equal(tf.to_int32(tf.argmax( output, 2)), true_labels)
   accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
 
   print "Loading Data"
   train, val, test = load_data()
   train = batchify(train, batch_size)
-  train = sorted(train,key= lambda x: x[1].shape[1])
+  #train = sorted(train,key= lambda x: x[1].shape[1])
   random.shuffle(train)
   val = batchify(val, batch_size)
   test = batchify(test, batch_size)
@@ -205,41 +212,70 @@ def main():
   last_val_acc = 0
   reduce_lr = 0
   with tf.Session() as sess:
-    sess.run(tf.global_variables_initializer())
-    print "Training"
-    for i in range(epochs):
-      if reduce_lr == 5:
-        lr = max(min_lr, lr-0.005)
-        reduce_lr = 0
-      print "Epoch %d learning rate %.4f"%(i,lr)
-      epoch_start_time = time.time()
-      batch_50_start = epoch_start_time
-      for j in range(len(train)):
-        images, labels = train[j]
-        if j<20 or j%50==0:
-          train_accuracy = accuracy.eval(feed_dict={
-            inp: images, true_labels:labels, num_rows: images.shape[1], num_columns: images.shape[2], num_words:labels.shape[1]})
-          new_time = time.time()
-          print("step %d/%d, training accuracy %g, took %f mins"%(j, len(train), train_accuracy, (new_time - batch_50_start)/60))
-          batch_50_start = new_time
-        train_step.run(feed_dict={learning_rate: lr, inp: images, true_labels: labels, num_rows: images.shape[1], num_columns: images.shape[2], num_words: labels.shape[1]})
-      print "Time for epoch:%f mins"%((time.time()-epoch_start_time)/60)
-      print "Testing on Validation Set"
+    try:
+      sess.run(tf.global_variables_initializer())
+      print "Training"
+      for i in range(epochs):
+        if reduce_lr == 5:
+          lr = max(min_lr, lr-0.005)
+          reduce_lr = 0
+        print "Epoch %d learning rate %.4f"%(i,lr)
+        epoch_start_time = time.time()
+        batch_50_start = epoch_start_time
+        for j in range(len(train)):
+          images, labels = train[j]
+          if j<5 or j%50==0:
+            train_accuracy = accuracy.eval(feed_dict={inp: images,\
+                                            true_labels:labels,\
+                                            num_rows: images.shape[1],\
+                                            num_columns: images.shape[2],\
+                                            num_words:labels.shape[1]})
+            new_time = time.time()
+            print("step %d/%d, training accuracy %g, took %f mins"%\
+                  (j, len(train), train_accuracy, (new_time - batch_50_start)/60))
+            batch_50_start = new_time
+          train_step.run(feed_dict={learning_rate: lr,\
+                                    inp: images,\
+                                    true_labels: labels,\
+                                    num_rows: images.shape[1],\
+                                    num_columns: images.shape[2],\
+                                    num_words: labels.shape[1]})
+        print "Time for epoch:%f mins"%((time.time()-epoch_start_time)/60)
+        print "Running on Validation Set"
+        accs = []
+        for j in range(len(val)):
+          images, labels = val[j]
+          val_accuracy = accuracy.eval(feed_dict={inp: images,\
+                                        true_labels: labels,\
+                                        num_rows: images.shape[1],\
+                                        num_columns: images.shape[2],\
+                                        num_words: labels.shape[1]})
+          accs.append( val_accuracy )
+        val_acc = sess.run(tf.reduce_mean(accs))
+        if (val_acc - last_val_acc) >= 1:
+          reduce_lr = 0
+        else:
+          reduce_lr = reduce_lr + 1
+        last_val_acc = val_acc
+        print("val accuracy %g"%val_acc)
+    finally:
+      print 'Saving model'
+      saver = tf.train.Saver()
+      id = 'saved_models/model-'+time.strftime("%d-%m-%Y--%H-%M")
+      os.mkdir(id)
+      save_path = saver.save(sess, id+'/model' )
+      print 'Running on Test Set'
       accs = []
-      for j in range(len(val)):
-        images, labels = val[j]
-        val_accuracy = accuracy.eval(feed_dict={
-          inp: images, true_labels: labels, num_rows: images.shape[1], num_columns: images.shape[2], num_words: labels.shape[1]})
-        accs.append( val_accuracy )
-      val_acc = sess.run(tf.reduce_mean(accs))
-      if (val_acc - last_val_acc) >= 1:
-        reduce_lr = 0
-      else:
-        reduce_lr = reduce_lr + 1
-      last_val_acc = val_acc
-      print("test accuracy %g"%val_acc)
-
-
+      for j in range(len(test)):
+        images, labels = test[j]
+        test_accuracy = accuracy.eval(feed_dict={inp: images,\
+                                                  true_labels: labels,\
+                                                  num_rows: images.shape[1],\
+                                                  num_columns: images.shape[2],\
+                                                  num_words: labels.shape[1]})
+        accs.append( test_accuracy )
+      test_acc = sess.run(tf.reduce_mean(accs))
+      print("test accuracy %g"%test_acc)
 
 if __name__ == "__main__":
   main()

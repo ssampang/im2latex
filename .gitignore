@@ -4,3 +4,4 @@
 data/formula_images/*
 data/images_processed/*
 *.txt
+saved_models/*
