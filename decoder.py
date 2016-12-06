@@ -111,7 +111,8 @@ def attention_decoder(initial_state,
           softmax_input = linear(output,vocab_size,False)
 
       new_outputs = tf.concat(1, [outputs,tf.expand_dims(softmax_input,1)])
-      return (time_step + tf.constant(1, dtype=tf.int32), output, softmax_input, state.c, state.h, new_outputs)
+      return (time_step + tf.constant(1, dtype=tf.int32),\
+              output, softmax_input, state.c, state.h, new_outputs)
 
     time_step = tf.constant(0, dtype=tf.int32)
     shape_invariants = [time_step.get_shape(),\
@@ -128,11 +129,15 @@ def attention_decoder(initial_state,
                  prev,\
                  tf.constant(init_word, dtype=tf.float32),\
                  initial_state.c,initial_state.h,\
-                 tf.zeros([batch_size,1,vocab_size])]
+                 tf.zeros([batch_size,1,vocab_size])] # we just need to feed an empty matrix
+                                                      # to start off the while loop since you can
+                                                      # only concat matrices that agree on all but
+                                                      # one dimension. Below, we remove that initial
+                                                      # filler index
 
     outputs = tf.while_loop(cond, body, loop_vars, shape_invariants)
 
-  return outputs[-1], tf.nn.rnn_cell.LSTMStateTuple(outputs[-3],outputs[-2])
+  return outputs[-1][:,1:], tf.nn.rnn_cell.LSTMStateTuple(outputs[-3],outputs[-2])
 
 def embedding_attention_decoder(initial_state,
                                 attention_states,

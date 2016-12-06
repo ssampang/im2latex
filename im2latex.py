@@ -7,6 +7,7 @@ def load_data():
   vocab_to_idx = dict([ (vocab[i],i) for i in range(len(vocab))])
   formulas = open('data/formulas.norm.lst').read().split('\n')
 
+  # four meta keywords
   # 0: START
   # 1: END
   # 2: UNKNOWN
@@ -19,7 +20,7 @@ def load_data():
       if token in vocab_to_idx:
         res.append( vocab_to_idx[token] + 4 )
       else:
-        res.append( 2 )
+        res.append(2)
     res.append(1)
     return res
 
@@ -40,7 +41,7 @@ def load_data():
   return train, val, test
 
 def batchify(data, batch_size):
-# group by image size
+  # group by image size
   res = {}
   for datum in data:
     if datum[0].shape not in res:
@@ -49,6 +50,8 @@ def batchify(data, batch_size):
       res[datum[0].shape].append(datum)
   batches = []
   for size in res:
+    # batch by similar sequence length within each image-size group -- this keeps padding to a
+    # minimum
     group = sorted(res[size], key= lambda x: len(x[1]))
     for i in range(0, len(group), batch_size):
       images = map(lambda x: np.expand_dims(np.expand_dims(x[0],0),3), group[i:i+batch_size])
@@ -60,25 +63,26 @@ def batchify(data, batch_size):
         return np.expand_dims( pad, 0)
       labels = map( preprocess, group[i:i+batch_size])
       batch_labels = np.concatenate(labels, 0)
-#[((50, 120), 6000), ((40, 160), 6400), ((40, 200), 8000), ((40, 240), 9600), ((50, 200), 10000), ((40, 280), 11200), ((50, 240), 12000), ((40, 320), 12800), ((50, 280), 14000), ((40, 360), 14400), ((50, 320), 16000), ((50, 360), 18000), ((50, 400), 20000), ((60, 360), 21600), ((100, 360), 36000), ((100, 500), 50000), ((160, 400), 64000)]
-      too_big = [(160,400),(100,500),(100,360),(60,360),  (100,800), (200,500), (800,800), (100,600)]
-      if batch_labels.shape[0] == batch_size and not (batch_images.shape[1],batch_images.shape[2]) in too_big:
+      too_big = [(160,400),(100,500),(100,360),(60,360),\
+                (100,800), (200,500), (800,800), (100,600)] # these are only for the test set
+      if batch_labels.shape[0] == batch_size\
+          and not (batch_images.shape[1],batch_images.shape[2]) in too_big:
         batches.append( (batch_images, batch_labels) )
-#skip the last incomplete batch for now
+  #skip the last incomplete batch for now
   return batches
 
-def weight_variable(name,shape):
-  initial = tf.truncated_normal(shape, stddev=0.1)
-  return tf.get_variable(name + "_weights", initializer= initial)
-
-def bias_variable(name, shape):
-  initial = tf.constant(0.1, shape=shape)
-  return tf.get_variable(name + "_bias", initializer= initial)
-
-def conv2d(x,W):
-  return tf.nn.conv2d(x,W, strides=[1,1,1,1], padding='SAME')
-
 def init_cnn(inp):
+  def weight_variable(name,shape):
+    initial = tf.truncated_normal(shape, stddev=0.1)
+    return tf.get_variable(name + "_weights", initializer= initial)
+
+  def bias_variable(name, shape):
+    initial = tf.constant(0.1, shape=shape)
+    return tf.get_variable(name + "_bias", initializer= initial)
+
+  def conv2d(x,W):
+    return tf.nn.conv2d(x,W, strides=[1,1,1,1], padding='SAME')
+
   W_conv1 = weight_variable("conv1", [3,3,1,512])
   b_conv1 = bias_variable("conv1", [512])
   h_conv1 = tf.nn.relu(conv2d(inp,W_conv1) + b_conv1)
@@ -128,34 +132,36 @@ def build_model(inp, batch_size, num_rows, num_columns, dec_seq_len):
 
   cnn = init_cnn(inp)
 
-  #function for map to apply the rnn to each row
+  #f unction for map to apply the rnn to each row
   def fn(inp):
     enc_init_shape = [batch_size, enc_lstm_dim]
     with tf.variable_scope('encoder_rnn'):
       with tf.variable_scope('forward'):
         lstm_cell_fw = tf.nn.rnn_cell.LSTMCell(enc_lstm_dim)
         init_fw = tf.nn.rnn_cell.LSTMStateTuple(\
-                  tf.get_variable("enc_fw_c", enc_init_shape, initializer=tf.contrib.layers.initializers.xavier_initializer()),\
-                  tf.get_variable("enc_fw_h", enc_init_shape, initializer=tf.contrib.layers.initializers.xavier_initializer())
+                  tf.get_variable("enc_fw_c", enc_init_shape),\
+                  tf.get_variable("enc_fw_h", enc_init_shape)
                   )
       with tf.variable_scope('backward'):
         lstm_cell_bw = tf.nn.rnn_cell.LSTMCell(enc_lstm_dim)
         init_bw = tf.nn.rnn_cell.LSTMStateTuple(\
-                  tf.get_variable("enc_bw_c", enc_init_shape, initializer=tf.contrib.layers.initializers.xavier_initializer()),\
-                  tf.get_variable("enc_bw_h", enc_init_shape, initializer=tf.contrib.layers.initializers.xavier_initializer())
+                  tf.get_variable("enc_bw_c", enc_init_shape),\
+                  tf.get_variable("enc_bw_h", enc_init_shape)
                   )
       output, _ = tf.nn.bidirectional_dynamic_rnn(lstm_cell_fw, \
                                                   lstm_cell_bw, \
                                                   inp, \
-                                                  sequence_length = tf.fill([batch_size], tf.shape(inp)[1]), \
+                                                  sequence_length = tf.fill([batch_size],\
+                                                                            tf.shape(inp)[1]), \
                                                   initial_state_fw = init_fw, \
                                                   initial_state_bw = init_bw \
                                                   )
     return tf.concat(2,output)
 
   fun = tf.make_template('fun', fn)
-  #shape is (batch size, rows, columns, features)
-  #swap axes so rows are first. map splits tensor on first axis, so fn will be applied to tensors of shape (batch_size,time_steps,feat_size)
+  # shape is (batch size, rows, columns, features)
+  # swap axes so rows are first. map splits tensor on first axis, so fn will be applied to tensors
+  # of shape (batch_size,time_steps,feat_size)
   rows_first = tf.transpose(cnn,[1,0,2,3])
   res = tf.map_fn(fun, rows_first, dtype=tf.float32)
   encoder_output = tf.transpose(res,[1,0,2,3])
@@ -168,15 +174,15 @@ def build_model(inp, batch_size, num_rows, num_columns, dec_seq_len):
   init_words = np.zeros([batch_size,1,vocab_size])
 
   decoder_output = decoder.embedding_attention_decoder(dec_init_state,\
-                                               tf.reshape(encoder_output,\
-                                                          [batch_size, -1,\
-                                                          2*enc_lstm_dim]),\
-                                               dec_lstm_cell,\
-                                               vocab_size,\
-                                               dec_seq_len,
-                                               batch_size,
-                                               embedding_size,\
-                                               feed_previous=True)
+                                                       tf.reshape(encoder_output,\
+                                                                  [batch_size, -1,\
+                                                                  2*enc_lstm_dim]),\
+                                                       dec_lstm_cell,\
+                                                       vocab_size,\
+                                                       dec_seq_len,\
+                                                       batch_size,\
+                                                       embedding_size,\
+                                                       feed_previous=True)
 
   return (encoder_output, decoder_output)
 
@@ -195,7 +201,6 @@ def main():
 
   print "Building Model"
   _, (output,state) = build_model(inp, batch_size, num_rows, num_columns, num_words)
-  output = output[:,1:]
   cross_entropy = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(output,true_labels))
   train_step = tf.train.GradientDescentOptimizer(learning_rate).minimize(cross_entropy)
   correct_prediction = tf.equal(tf.to_int32(tf.argmax( output, 2)), true_labels)
@@ -226,10 +231,10 @@ def main():
           images, labels = train[j]
           if j<5 or j%50==0:
             train_accuracy = accuracy.eval(feed_dict={inp: images,\
-                                            true_labels:labels,\
-                                            num_rows: images.shape[1],\
-                                            num_columns: images.shape[2],\
-                                            num_words:labels.shape[1]})
+                                                      true_labels:labels,\
+                                                      num_rows: images.shape[1],\
+                                                      num_columns: images.shape[2],\
+                                                      num_words:labels.shape[1]})
             new_time = time.time()
             print("step %d/%d, training accuracy %g, took %f mins"%\
                   (j, len(train), train_accuracy, (new_time - batch_50_start)/60))
@@ -246,10 +251,10 @@ def main():
         for j in range(len(val)):
           images, labels = val[j]
           val_accuracy = accuracy.eval(feed_dict={inp: images,\
-                                        true_labels: labels,\
-                                        num_rows: images.shape[1],\
-                                        num_columns: images.shape[2],\
-                                        num_words: labels.shape[1]})
+                                                  true_labels: labels,\
+                                                  num_rows: images.shape[1],\
+                                                  num_columns: images.shape[2],\
+                                                  num_words: labels.shape[1]})
           accs.append( val_accuracy )
         val_acc = sess.run(tf.reduce_mean(accs))
         if (val_acc - last_val_acc) >= 1:
