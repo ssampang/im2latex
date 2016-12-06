@@ -257,7 +257,7 @@ def main():
                                                   num_words: labels.shape[1]})
           accs.append( val_accuracy )
         val_acc = sess.run(tf.reduce_mean(accs))
-        if (val_acc - last_val_acc) >= 1:
+        if (val_acc - last_val_acc) >= .01:
           reduce_lr = 0
         else:
           reduce_lr = reduce_lr + 1
