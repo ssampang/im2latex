@@ -10,7 +10,15 @@ tar -xzvf formula_images.tar.gz
 
 echo 'Preprocessing'
 cd im2markup
+git submodule update --init --recursive
 python scripts/preprocessing/preprocess_images.py --input-dir ../formula_images --output-dir ../images_processed
+
+if node -v; then
+  printf''
+else
+  sudo apt-get install nodejs-legacy
+fi
+
 python scripts/preprocessing/preprocess_formulas.py --mode normalize --input-file ../im2latex_formulas.lst --output-file ../formulas.norm.lst
 python scripts/preprocessing/preprocess_filter.py --filter --image-dir ../images_processed --label-path ../formulas.norm.lst --data-path ../im2latex_train.lst --output-path ../train_filter.lst
 python scripts/preprocessing/preprocess_filter.py --filter --image-dir ../images_processed --label-path ../formulas.norm.lst --data-path ../im2latex_validate.lst --output-path ../validate_filter.lst 

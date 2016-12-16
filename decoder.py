@@ -117,10 +117,10 @@ def attention_decoder(initial_state,
     time_step = tf.constant(0, dtype=tf.int32)
     shape_invariants = [time_step.get_shape(),\
                         prev.get_shape(),\
-                        tf.nn.tensor_shape.TensorShape([batch_size, vocab_size]),\
-                        tf.nn.tensor_shape.TensorShape([batch_size,512]),\
-                        tf.nn.tensor_shape.TensorShape([batch_size,512]),\
-                        tf.nn.tensor_shape.TensorShape([batch_size, None, vocab_size])]
+                        tf.TensorShape([batch_size, vocab_size]),\
+                        tf.TensorShape([batch_size,512]),\
+                        tf.TensorShape([batch_size,512]),\
+                        tf.TensorShape([batch_size, None, vocab_size])]
 
 # START keyword is 0
     init_word = np.zeros([batch_size, vocab_size])

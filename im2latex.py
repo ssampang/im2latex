@@ -1,4 +1,5 @@
-import Image, random, time, os, decoder
+import random, time, os, decoder
+from PIL import Image
 import numpy as np
 import tensorflow as tf
 
@@ -63,7 +64,7 @@ def batchify(data, batch_size):
         return np.expand_dims( pad, 0)
       labels = map( preprocess, group[i:i+batch_size])
       batch_labels = np.concatenate(labels, 0)
-      too_big = [(160,400),(100,500),(100,360),(60,360),\
+      too_big = [(160,400),(100,500),(100,360),(60,360),(50,400),\
                 (100,800), (200,500), (800,800), (100,600)] # these are only for the test set
       if batch_labels.shape[0] == batch_size\
           and not (batch_images.shape[1],batch_images.shape[2]) in too_big:
@@ -202,7 +203,7 @@ def main():
   print "Building Model"
   _, (output,state) = build_model(inp, batch_size, num_rows, num_columns, num_words)
   cross_entropy = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(output,true_labels))
-  train_step = tf.train.GradientDescentOptimizer(learning_rate).minimize(cross_entropy)
+  train_step = tf.train.AdadeltaOptimizer(learning_rate).minimize(cross_entropy)
   correct_prediction = tf.equal(tf.to_int32(tf.argmax( output, 2)), true_labels)
   accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
 
