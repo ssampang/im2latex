@@ -1,3 +1,5 @@
+NOTE: This project is not actively maintained and may not run on recent versions of TensorFlow
+
 # im2latex
 
 This is a TensorFlow port of harvardnlp's [im2markup](https://github.com/harvardnlp/im2markup/) project. The model accepts images of mathematical equations typeset in Latex, and outputs the markup used to generate those images. It contains the im2markup project as a git submodule to make use of its preprocessing scripts.
